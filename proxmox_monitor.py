@@ -812,28 +812,41 @@ class ProxMonWindow(QMainWindow):
         sub_tabs = QTabWidget()
         sub_tabs.setDocumentMode(True)
 
-        def make_table(columns):
+        def make_table(columns, narrow_cols=None):
             tbl = QTableWidget()
             tbl.setColumnCount(len(columns))
             tbl.setHorizontalHeaderLabels(columns)
-            tbl.horizontalHeader().setStretchLastSection(True)
-            tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
             tbl.verticalHeader().setVisible(False)
             tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
             tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            # Set narrow columns to fixed, rest to stretch
+            header = tbl.horizontalHeader()
+            header.setStretchLastSection(True)
+            for i in range(len(columns)):
+                if narrow_cols and i in narrow_cols:
+                    header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+                else:
+                    header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
             return tbl
 
+        # ID, Status, CPU are narrow; Name, RAM, Disk I/O, Net I/O, Uptime stretch
         storage_table = make_table(["Storage", "Type", "Usage", "Used / Total"])
         sub_tabs.addTab(storage_table, "Storage")
 
-        vm_table = make_table(["VMID", "Name", "Status", "CPU", "RAM", "Disk I/O", "Net I/O", "Uptime"])
+        vm_table = make_table(
+            ["VMID", "Name", "Status", "CPU", "RAM", "Disk I/O", "Net I/O", "Uptime"],
+            narrow_cols={0, 2, 3}  # VMID, Status, CPU
+        )
         vm_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         vm_table.customContextMenuRequested.connect(
             lambda pos, n=node_name, tbl=vm_table: self._vm_context_menu(pos, n, tbl, "qemu")
         )
         sub_tabs.addTab(vm_table, "VMs")
 
-        ct_table = make_table(["CTID", "Name", "Status", "CPU", "RAM", "Disk I/O", "Net I/O", "Uptime"])
+        ct_table = make_table(
+            ["CTID", "Name", "Status", "CPU", "RAM", "Disk I/O", "Net I/O", "Uptime"],
+            narrow_cols={0, 2, 3}  # CTID, Status, CPU
+        )
         ct_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         ct_table.customContextMenuRequested.connect(
             lambda pos, n=node_name, tbl=ct_table: self._vm_context_menu(pos, n, tbl, "lxc")
@@ -959,7 +972,7 @@ class ProxMonWindow(QMainWindow):
         self.tray_icon.show()
 
     def _update_tray_icon(self, cpu_pct):
-        size = 64
+        size = 128  # Larger canvas for crisp text
         pixmap = QPixmap(size, size)
         pixmap.fill(QColor(0, 0, 0, 0))
         painter = QPainter(pixmap)
@@ -975,10 +988,15 @@ class ProxMonWindow(QMainWindow):
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(bg)
-        painter.drawRoundedRect(2, 2, size - 4, size - 4, 10, 10)
+        painter.drawRoundedRect(2, 2, size - 4, size - 4, 16, 16)
         painter.setPen(fg)
         cpu_int = int(round(cpu_pct))
-        fs = 18 if cpu_int >= 100 else 24 if cpu_int >= 10 else 28
+        if cpu_int >= 100:
+            fs = 40
+        elif cpu_int >= 10:
+            fs = 52
+        else:
+            fs = 64
         painter.setFont(QFont("Segoe UI", fs, QFont.Weight.Black))
         painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, str(cpu_int))
         painter.end()
@@ -1071,7 +1089,7 @@ class ProxMonWindow(QMainWindow):
         self.host_info.setText(f"{', '.join(nodes.keys())}@{host}  •  PVE {pve_ver}")
 
         primary_node = self.config.get("node", "").lower()
-        primary_cpu = 0
+        primary_cpu = None
 
         for nname, ndata in nodes.items():
             if nname not in self.node_tabs:
@@ -1096,8 +1114,11 @@ class ProxMonWindow(QMainWindow):
                 w["cpu_gauge"].set_value(cpu_pct, 100, f"{maxcpu} threads")
                 w["cpu_model_label"].setText(f"CPU: {maxcpu} threads")
 
-            if nname.lower() == primary_node or not primary_cpu:
+            if nname.lower() == primary_node or primary_cpu is None:
                 primary_cpu = cpu_pct
+
+        if primary_cpu is None:
+            primary_cpu = 0
 
             # Memory
             if status:
