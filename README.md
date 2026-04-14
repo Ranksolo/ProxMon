@@ -1,7 +1,8 @@
 # ProxMon — Proxmox Desktop Monitor
 
 A lightweight desktop widget for real-time Proxmox VE server monitoring.  
-Think **CPU-Z**, but for your Proxmox hypervisor.
+Think **CPU-Z**, but for your Proxmox hypervisor. 
+*For .exe go to releases. 
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
