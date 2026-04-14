@@ -1090,6 +1090,8 @@ class ProxMonWindow(QMainWindow):
 
         primary_node = self.config.get("node", "").lower()
         primary_cpu = None
+        primary_mem_used = 0
+        primary_mem_total = 1
 
         for nname, ndata in nodes.items():
             if nname not in self.node_tabs:
@@ -1117,9 +1119,6 @@ class ProxMonWindow(QMainWindow):
             if nname.lower() == primary_node or primary_cpu is None:
                 primary_cpu = cpu_pct
 
-        if primary_cpu is None:
-            primary_cpu = 0
-
             # Memory
             if status:
                 mu = status.get("memory", {}).get("used", 0)
@@ -1127,6 +1126,10 @@ class ProxMonWindow(QMainWindow):
             else:
                 mu, mt = ns.get("mem", 0), ns.get("maxmem", 1)
             w["ram_gauge"].set_value(mu, mt, f"{fmt_bytes(mu)} / {fmt_bytes(mt)}")
+
+            if nname.lower() == primary_node or primary_mem_total == 1:
+                primary_mem_used = mu
+                primary_mem_total = mt
 
             # Swap / Root Disk
             if status:
@@ -1246,8 +1249,10 @@ class ProxMonWindow(QMainWindow):
                 ctbl.setItem(i, 7, QTableWidgetItem(fmt_uptime(ct.get("uptime", 0))))
 
         # Tray
+        if primary_cpu is None:
+            primary_cpu = 0
         self._update_tray_icon(primary_cpu)
-        mp = (mu / mt * 100) if mt > 0 else 0
+        mp = (primary_mem_used / primary_mem_total * 100) if primary_mem_total > 0 else 0
         self.tray_icon.setToolTip(f"ProxMon — CPU: {primary_cpu:.0f}% | RAM: {mp:.0f}%")
 
     def _on_error(self, error_msg):
