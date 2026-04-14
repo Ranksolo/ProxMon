@@ -414,6 +414,18 @@ class StatusDot(QWidget):
         p.end()
 
 
+class NumericTableItem(QTableWidgetItem):
+    """Table item that sorts by numeric value instead of alphabetically."""
+    def __init__(self, display_text, sort_value=0):
+        super().__init__(display_text)
+        self._sort_value = sort_value
+
+    def __lt__(self, other):
+        if isinstance(other, NumericTableItem):
+            return self._sort_value < other._sort_value
+        return super().__lt__(other)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Settings Dialog
 # ═══════════════════════════════════════════════════════════════════════
@@ -819,9 +831,10 @@ class ProxMonWindow(QMainWindow):
             tbl.verticalHeader().setVisible(False)
             tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
             tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-            # Set narrow columns to fixed, rest to stretch
+            tbl.setSortingEnabled(True)
             header = tbl.horizontalHeader()
             header.setStretchLastSection(True)
+            header.setSortIndicatorShown(True)
             for i in range(len(columns)):
                 if narrow_cols and i in narrow_cols:
                     header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
@@ -1185,6 +1198,7 @@ class ProxMonWindow(QMainWindow):
             # Storage table
             sl = ndata.get("storage", [])
             stbl = w["storage_table"]
+            stbl.setSortingEnabled(False)
             stbl.setRowCount(len(sl))
             for i, s in enumerate(sorted(sl, key=lambda x: x.get("storage", x.get("id", "")))):
                 sname = s.get("storage", s.get("id", "?"))
@@ -1195,61 +1209,77 @@ class ProxMonWindow(QMainWindow):
                 used = s.get("disk", s.get("used", 0)) or 0
                 total = s.get("maxdisk", s.get("total", 1)) or 1
                 pct = (used / total * 100) if total > 0 else 0
-                pi = QTableWidgetItem(f"{pct:.1f}%")
+                pi = NumericTableItem(f"{pct:.1f}%", pct)
                 c = self.theme["red"] if pct > 90 else self.theme["yellow"] if pct > 75 else self.theme["green"]
                 pi.setForeground(QColor(c))
                 stbl.setItem(i, 2, pi)
-                stbl.setItem(i, 3, QTableWidgetItem(f"{fmt_bytes(used)} / {fmt_bytes(total)}"))
+                stbl.setItem(i, 3, NumericTableItem(f"{fmt_bytes(used)} / {fmt_bytes(total)}", used))
+            stbl.setSortingEnabled(True)
 
             # VM table
             vtbl = w["vm_table"]
+            vtbl.setSortingEnabled(False)
             vms_s = sorted(vms, key=lambda x: x.get("vmid", 0))
             vtbl.setRowCount(len(vms_s))
             for i, vm in enumerate(vms_s):
-                vid = vm.get("vmid", "?")
-                vtbl.setItem(i, 0, QTableWidgetItem(str(vid)))
+                vid = vm.get("vmid", 0)
+                vtbl.setItem(i, 0, NumericTableItem(str(vid), vid))
                 vtbl.setItem(i, 1, QTableWidgetItem(vm.get("name", "—")))
                 vs = vm.get("status", "unknown")
                 si = QTableWidgetItem(vs)
                 c = self.theme["green"] if vs == "running" else self.theme["red"] if vs == "stopped" else self.theme["yellow"]
                 si.setForeground(QColor(c))
                 vtbl.setItem(i, 2, si)
-                vtbl.setItem(i, 3, QTableWidgetItem(f"{vm.get('cpu', 0) * 100:.1f}%"))
-                vtbl.setItem(i, 4, QTableWidgetItem(f"{fmt_bytes(vm.get('mem', 0))} / {fmt_bytes(vm.get('maxmem', 1))}"))
+                cpu_val = vm.get("cpu", 0) * 100
+                vtbl.setItem(i, 3, NumericTableItem(f"{cpu_val:.1f}%", cpu_val))
+                vm_mem = vm.get("mem", 0)
+                vm_maxmem = vm.get("maxmem", 1)
+                vtbl.setItem(i, 4, NumericTableItem(f"{fmt_bytes(vm_mem)} / {fmt_bytes(vm_maxmem)}", vm_mem))
                 rates = self.io_tracker.update(vid, vm.get("diskread", 0), vm.get("diskwrite", 0),
                                                 vm.get("netin", 0), vm.get("netout", 0))
                 if rates:
-                    vtbl.setItem(i, 5, QTableWidgetItem(f"R:{fmt_rate(rates['disk_read_rate'])} W:{fmt_rate(rates['disk_write_rate'])}"))
-                    vtbl.setItem(i, 6, QTableWidgetItem(f"↓{fmt_rate(rates['net_in_rate'])} ↑{fmt_rate(rates['net_out_rate'])}"))
+                    dr, dw = rates['disk_read_rate'], rates['disk_write_rate']
+                    ni, no = rates['net_in_rate'], rates['net_out_rate']
+                    vtbl.setItem(i, 5, NumericTableItem(f"R:{fmt_rate(dr)} W:{fmt_rate(dw)}", dr + dw))
+                    vtbl.setItem(i, 6, NumericTableItem(f"↓{fmt_rate(ni)} ↑{fmt_rate(no)}", ni + no))
                 else:
-                    vtbl.setItem(i, 5, QTableWidgetItem("—"))
-                    vtbl.setItem(i, 6, QTableWidgetItem("—"))
-                vtbl.setItem(i, 7, QTableWidgetItem(fmt_uptime(vm.get("uptime", 0))))
+                    vtbl.setItem(i, 5, NumericTableItem("—", -1))
+                    vtbl.setItem(i, 6, NumericTableItem("—", -1))
+                vm_up = vm.get("uptime", 0)
+                vtbl.setItem(i, 7, NumericTableItem(fmt_uptime(vm_up), vm_up))
+            vtbl.setSortingEnabled(True)
 
             # Container table
             ctbl = w["ct_table"]
+            ctbl.setSortingEnabled(False)
             cts_s = sorted(cts, key=lambda x: x.get("vmid", 0))
             ctbl.setRowCount(len(cts_s))
             for i, ct in enumerate(cts_s):
-                cid = ct.get("vmid", "?")
-                ctbl.setItem(i, 0, QTableWidgetItem(str(cid)))
+                cid = ct.get("vmid", 0)
+                ctbl.setItem(i, 0, NumericTableItem(str(cid), cid))
                 ctbl.setItem(i, 1, QTableWidgetItem(ct.get("name", "—")))
                 cs = ct.get("status", "unknown")
                 si = QTableWidgetItem(cs)
                 c = self.theme["green"] if cs == "running" else self.theme["red"] if cs == "stopped" else self.theme["yellow"]
                 si.setForeground(QColor(c))
                 ctbl.setItem(i, 2, si)
-                ctbl.setItem(i, 3, QTableWidgetItem(f"{ct.get('cpu', 0) * 100:.1f}%"))
-                ctbl.setItem(i, 4, QTableWidgetItem(f"{fmt_bytes(ct.get('mem', 0))} / {fmt_bytes(ct.get('maxmem', 1))}"))
+                cpu_val = ct.get("cpu", 0) * 100
+                ctbl.setItem(i, 3, NumericTableItem(f"{cpu_val:.1f}%", cpu_val))
+                ct_mem = ct.get("mem", 0)
+                ct_maxmem = ct.get("maxmem", 1)
+                ctbl.setItem(i, 4, NumericTableItem(f"{fmt_bytes(ct_mem)} / {fmt_bytes(ct_maxmem)}", ct_mem))
                 rates = self.io_tracker.update(cid, ct.get("diskread", 0), ct.get("diskwrite", 0),
                                                 ct.get("netin", 0), ct.get("netout", 0))
                 if rates:
-                    ctbl.setItem(i, 5, QTableWidgetItem(f"R:{fmt_rate(rates['disk_read_rate'])} W:{fmt_rate(rates['disk_write_rate'])}"))
-                    ctbl.setItem(i, 6, QTableWidgetItem(f"↓{fmt_rate(rates['net_in_rate'])} ↑{fmt_rate(rates['net_out_rate'])}"))
+                    dr, dw = rates['disk_read_rate'], rates['disk_write_rate']
+                    ni, no = rates['net_in_rate'], rates['net_out_rate']
+                    ctbl.setItem(i, 5, NumericTableItem(f"R:{fmt_rate(dr)} W:{fmt_rate(dw)}", dr + dw))
+                    ctbl.setItem(i, 6, NumericTableItem(f"↓{fmt_rate(ni)} ↑{fmt_rate(no)}", ni + no))
                 else:
-                    ctbl.setItem(i, 5, QTableWidgetItem("—"))
-                    ctbl.setItem(i, 6, QTableWidgetItem("—"))
-                ctbl.setItem(i, 7, QTableWidgetItem(fmt_uptime(ct.get("uptime", 0))))
+                    ctbl.setItem(i, 5, NumericTableItem("—", -1))
+                    ctbl.setItem(i, 6, NumericTableItem("—", -1))
+                ct_up = ct.get("uptime", 0)
+                ctbl.setItem(i, 7, NumericTableItem(fmt_uptime(ct_up), ct_up))
 
         # Tray
         if primary_cpu is None:
