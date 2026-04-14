@@ -1280,6 +1280,7 @@ class ProxMonWindow(QMainWindow):
                     ctbl.setItem(i, 6, NumericTableItem("—", -1))
                 ct_up = ct.get("uptime", 0)
                 ctbl.setItem(i, 7, NumericTableItem(fmt_uptime(ct_up), ct_up))
+            ctbl.setSortingEnabled(True)
 
         # Tray
         if primary_cpu is None:
