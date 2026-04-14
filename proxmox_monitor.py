@@ -972,11 +972,12 @@ class ProxMonWindow(QMainWindow):
         self.tray_icon.show()
 
     def _update_tray_icon(self, cpu_pct):
-        size = 128  # Larger canvas for crisp text
+        size = 256  # Large canvas, Windows scales down but keeps detail
         pixmap = QPixmap(size, size)
         pixmap.fill(QColor(0, 0, 0, 0))
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         t = self.theme
 
         if cpu_pct >= 90:
@@ -988,15 +989,15 @@ class ProxMonWindow(QMainWindow):
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(bg)
-        painter.drawRoundedRect(2, 2, size - 4, size - 4, 16, 16)
+        painter.drawRoundedRect(0, 0, size, size, 24, 24)
         painter.setPen(fg)
         cpu_int = int(round(cpu_pct))
         if cpu_int >= 100:
-            fs = 40
+            fs = 100
         elif cpu_int >= 10:
-            fs = 52
+            fs = 130
         else:
-            fs = 64
+            fs = 160
         painter.setFont(QFont("Segoe UI", fs, QFont.Weight.Black))
         painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, str(cpu_int))
         painter.end()
