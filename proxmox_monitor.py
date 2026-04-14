@@ -1000,7 +1000,9 @@ class ProxMonWindow(QMainWindow):
         painter.setFont(QFont("Segoe UI", fs, QFont.Weight.Black))
         painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, str(cpu_int))
         painter.end()
-        self.tray_icon.setIcon(QIcon(pixmap))
+        icon = QIcon(pixmap)
+        self.tray_icon.setIcon(icon)
+        self.setWindowIcon(icon)
 
     def _show_from_tray(self):
         self.showNormal()
